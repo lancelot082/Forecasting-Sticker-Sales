@@ -1,4 +1,4 @@
-# Rohlik-Sales-Forecasting-Challenge
+# Forecasting Sticker Sales
 ![image](https://github.com/user-attachments/assets/f29dc3f7-1039-4ea7-a20c-0647296fe781)
 
 
