@@ -1,14 +1,13 @@
 # Rohlik-Sales-Forecasting-Challenge
-![image](https://github.com/user-attachments/assets/8a7c3a32-f4e7-4954-8bf1-a53d73c669c2)
+![image](https://github.com/user-attachments/assets/f29dc3f7-1039-4ea7-a20c-0647296fe781)
+
 
 ## Overview
-Rohlik Group, a leading European e-grocery innovator, is revolutionising the food retail industry. We operate across 11 warehouses in Czech Republic, Germany, Austria, Hungary, and Romania.
-We are now transitioning from the Rohlik Orders Forecasting Challenge to the Rohlik Sales Forecasting Challenge, as we continue with our set of challenges. This challenge focuses on predicting the sales of each selected warehouse inventory for next 14 days using historical sales data.
+Your Goal: The objective of this challenge is to forecast sticker sales in different countries.
 
 ___
 
-Группа компаний "Рохлик", ведущий европейский новатор в области электронных продуктов питания, совершает революцию в сфере розничной торговли продуктами питания. Мы работаем на 11 складах в Чехии, Германии, Австрии, Венгрии и Румынии.
-В настоящее время мы переходим от задачи по прогнозированию заказов Rohlik к задаче по прогнозированию продаж Rohlik, продолжая наш набор задач. Эта задача направлена на прогнозирование продаж каждого выбранного складского запаса на следующие 14 дней с использованием исторических данных о продажах.
+Ваша цель: Задача состоит в том, чтобы спрогнозировать продажи наклеек в разных странах.
 ___
 
 ## EDA
