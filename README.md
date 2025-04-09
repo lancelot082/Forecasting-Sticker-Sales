@@ -1,103 +1,111 @@
 # Forecasting Sticker Sales
 ![image](https://github.com/user-attachments/assets/f29dc3f7-1039-4ea7-a20c-0647296fe781)
 
+Цель проекта — спрогнозировать продажи (`num_sold`) для различных комбинаций **страны**, **магазина** и **товара** на ежедневной основе. Прогнозируемый период — **2017–2019 гг.**, тренировочные данные даны с 2010 по 2016.
 
-## Overview
-Your Goal: The objective of this challenge is to forecast sticker sales in different countries.
+В проекте реализованы **две независимые стратегии прогнозирования**:
 
-___
+1. Градиентный бустинг на признаках времени (XGBoost + Optuna)
+2. Классическая модель Exponential Smoothing на агрегированных временных рядах
 
-Ваша цель: Задача состоит в том, чтобы спрогнозировать продажи наклеек в разных странах.
-___
+---
 
-## EDA
-### lineplot
-<pre>
-  ```
-# Задаем параметры фигуры
-fig, axes = plt.subplots(2, 3, figsize=(15, 10), sharey=True)
+## 1. EDA (исследовательский анализ)
 
-# Генерируем графики по годам
-for i, year in enumerate(range(2010, 2016)):
-    ax = axes[i // 3, i % 3]  # Определяем положение в сетке
-    sns.lineplot(
-        data=train[train['date'].dt.year == year],
-        x=train[train['date'].dt.year == year]['date'].dt.month,
-        y='num_sold',
-        ax=ax
-    )
-    ax.set_title(f'Sales in {year}')
-    ax.set_xlabel('Month')
-    ax.set_ylabel('Num Sold')
+- Исследована сезонность по **годам, месяцам и дням**
+- Построены lineplot и barplot по категориям: `country`, `store`, `product`
+- Использован `seasonal_decompose` из `statsmodels` для анализа трендов и сезонных колебаний
+![image](https://github.com/user-attachments/assets/44785682-734a-45d6-a1dd-236757cff679)
+![image](https://github.com/user-attachments/assets/4219cce3-4889-4f37-a8cc-51ac7810e3a1)
 
-# Очищаем и упорядочиваем
-plt.tight_layout()
-  ```
-</pre>
-![image](https://github.com/user-attachments/assets/e9904549-8a5a-46ad-aad3-a120cf10241b)
+Это позволило подтвердить:
+- Выраженную **годовую и месячную сезонность**
+- Стабильные паттерны спроса по категориям
+- Отсутствие выбросов и пропущенных дат в пределах каждой временной серии
+![image](https://github.com/user-attachments/assets/c7805a77-5cd4-401c-9879-e710cd8c72fe)
+![image](https://github.com/user-attachments/assets/17d18fd1-5974-4628-af76-5e826d539315)
 
+---
 
-<pre>
-  ```
-fit, axes = plt.subplots(1, 3, figsize = (18, 6))
+## 2. Подход №1 — Модель XGBoost с признаками времени
 
-sns.lineplot(data = train, x = train['date'].dt.year, y = train['num_sold'], hue = train['country'], ax = axes[0])
-axes[0].set_title('Sold Year-Country')
+Машинное обучение используется для предсказания логарифма продаж (`log1p(num_sold)`), а затем значения восстанавливаются в исходную шкалу. Основные этапы:
 
-sns.lineplot(data = train, x = train['date'].dt.year, y = train['num_sold'], hue = train['store'], ax = axes[1])
-axes[1].set_title('Sold Year-Store')
+### Временные признаки
 
-sns.lineplot(data = train, x = train['date'].dt.year, y = train['num_sold'], hue = train['product'], ax = axes[2])
-axes[2].set_title('Sold Year-Product')
-  ```
-</pre>
-![image](https://github.com/user-attachments/assets/bd87ccc4-eaec-40fa-9eaa-09e6dc68a75a)
+Из временной метки извлечены:
+- `year`, `month`, `day`, `day_of_week`, `day_of_year`
+- `week_of_year`, `linear_trend`, `squared_trend`
+- Периодические признаки через `sin`/`cos`
 
+```python
+df['sin_day_of_week'] = np.sin(2 * np.pi * df['day_of_week'] / 7)
+df['linear_trend'] = (df[date_column] - df[date_column].min()).dt.days
+```
 
-### barplot
-<pre>
-  ```
-fig, axes = plt.subplots(3, 1, figsize = (8, 12))
+### Препроцессинг
 
-sns.barplot(data = train, x = train['country'], y = train['num_sold'], ax = axes[0])
-axes[0].set_title('Sold country')
+- Категориальные признаки: `country`, `store`, `product` — One-Hot Encoding
+- Пропущенные значения отсутствуют
+- Целевая переменная логарифмирована: `log1p(num_sold)`
 
-sns.barplot(data = train, x = train['store'], y = train['num_sold'], ax = axes[1])
-axes[1].set_title('Sold store')
+### Оптимизация гиперпараметров
 
-sns.barplot(data = train, x = train['product'], y = train['num_sold'], ax = axes[2])
-axes[2].set_title('Sold product')
+Использован `Optuna` с кросс-валидацией по времени (`TimeSeriesSplit`). Метрика — **MAPE (Mean Absolute Percentage Error)**.
 
-plt.tight_layout()
-  ```
-</pre>
-![image](https://github.com/user-attachments/assets/4bc3de49-f2d4-4528-bd60-a8c477b8f67c)
+```python
+study = optuna.create_study(direction='minimize')
+study.optimize(objective, n_trials=60)
+```
 
+### Финальная модель
 
-### seasonal_decompose
-<pre>
-  ```
-from statsmodels.tsa.seasonal import seasonal_decompose
-from pylab import rcParams
+- Обучена на всех тренировочных данных
+- Предсказания на тест: результат переводится обратно из логарифма
+- Визуализация важности признаков (`feature_importances_`)
 
-series = train.copy()
+**Плюсы подхода**:
+- Гибкость и масштабируемость
+- Учитывает нелинейные зависимости
+- Возможность легко добавлять дополнительные фичи
 
-# Преобразуем дату в индекс и выбираем столбец
-series.set_index('date', inplace=True)
+---
 
-# Группируем данные по индексу (дате) и агрегируем
-series = series.groupby(series.index).sum()
+## 3. Подход №2 — Exponential Smoothing (ETS)
 
-series = series['num_sold'].asfreq('D')  # Устанавливаем дневную частоту
+Использована модель `Holt-Winters` из `statsmodels`:
 
-# Задаем размер графика
-rcParams['figure.figsize'] = 11, 9
+- **Агрегация** данных в матрицу: один временной ряд на каждую комбинацию `(country, store, product)`
+- Обработка каждой временной серии отдельно
+- Прогноз на 3 года (2017–2019) с годовой сезонностью (365 дней)
 
-# Применяем seasonal_decompose
-decompose = seasonal_decompose(series, model='additive', period=365)
-decompose.plot()
-plt.show()
-  ```
-</pre>
-![image](https://github.com/user-attachments/assets/3fd03bb7-c0fb-4de0-8f2c-d6d3b9b89aaf)
+```python
+model = ExponentialSmoothing(
+    np.sqrt(train_data),
+    trend='add',
+    seasonal='add',
+    seasonal_periods=365
+)
+forecast = model.fit().forecast(steps=steps) ** 2
+```
 
+### Постобработка
+
+- Прогноз объединяется с тестом по ключам `date`, `country`, `store`, `product`
+- Подготовлен `submission.csv` в требуемом формате
+
+### Валидация на 2016 году
+
+Для оценки качества ETS-модели был проведён прогноз только на 2016:
+- MAPE, RMSE, MAE рассчитаны между прогнозом и фактом
+- Построен график `fact vs forecast`
+
+**Плюсы подхода**:
+- Прозрачность и интерпретируемость
+- Учет сезонности напрямую
+- Не требует генерации фичей или кодирования категорий
+
+---
+### Score
+- XGBoost - 0.10661
+- ETS - 0.15488
